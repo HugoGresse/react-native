@@ -1,4 +1,4 @@
-# SwiftPM (Apple platforms)
+# SwiftPM (Apple platforms) — Preview
 
 [🏠 Home](../../../../../__docs__/README.md)
 
@@ -23,6 +23,23 @@ The documents here describe how the implementation actually works.
 cd ios
 npx react-native spm      # add on first run, update thereafter
 ```
+
+**If any autolinked dependency ships no `Package.swift`, this stops with
+`error: Package.swift is missing for library "<name>"` and exit code 2.** That
+is deliberate — `add` and `update` never scaffold silently, so a missing
+manifest is visible and fixed on purpose. Generate the manifests first, then
+re-run setup:
+
+```bash
+npx react-native spm scaffold   # writes Package.swift into node_modules/<dep>/
+npx react-native spm            # then inject as usual
+```
+
+Because `node_modules` isn't committed, persist each scaffolded manifest with
+`npx patch-package <dep>` and commit the patch — otherwise the same error
+returns on every fresh install and in CI. Better still, contribute the manifest
+upstream. See
+[Community packages without a Package.swift](./spm-scripts.md#community-packages-without-a-packageswift).
 
 See **[spm-scripts.md](./spm-scripts.md)** for the CLI actions and flags,
 CocoaPods migration, brownfield apps, what to commit, fresh clones and CI, and
