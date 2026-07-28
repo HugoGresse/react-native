@@ -180,21 +180,16 @@ byte-identical to its pre-`add` state.
 
 Everything under `build/` is gitignored, so a clean checkout has no resolvable
 Swift packages until they are regenerated. Xcode resolves the package graph
-**before any build phase runs**, so the build phase alone can't rescue this — a
-resolve that happens with `build/generated/autolinking` missing fails at
-_"Resolve Package Graph … doesn't exist"_.
+before build phases **and** before scheme pre-actions, so neither
+[auto-sync hook](#auto-sync) can rescue this: with `build/generated/autolinking`
+missing, the build stops at _"Resolve Package Graph … doesn't exist"_ having run
+neither hook.
 
-The [scheme pre-action](#auto-sync) is ordered ahead of resolution and can
-regenerate the packages (and fetch artifacts) on a scheme-driven build, so it
-covers the common case. It is not a substitute for the setup run, because it is
-not always what triggers resolution first:
-
-- Opening the project in Xcode resolves the graph on load, before you press
-  Build.
-- `xcodebuild` invoked against a target (`-target`) rather than a scheme, or
-  `xcodebuild -resolvePackageDependencies`, never runs scheme pre-actions.
-- The pre-action lives in the app's **shared** scheme. If
-  `xcshareddata/xcschemes/` wasn't committed, a fresh clone has no pre-action.
+Verified on Xcode 26.6 against a freshly-injected app with `build/` deleted:
+`xcodebuild -scheme … build` fails in nine lines of log, with
+`Resolve Package Graph` as the first step and no trace of the pre-action;
+`xcodebuild -resolvePackageDependencies` fails identically. Opening the project
+in Xcode also resolves the graph on load, before you press Build.
 
 So run the setup command once after cloning, before building — the SwiftPM
 analog of `pod install`:
@@ -432,16 +427,23 @@ flags.
 Autolinking is kept up to date without manual re-runs of `react-native spm` by
 **two hooks running the same sync script**, injected by `add`/`update`:
 
-| Hook                               | Where                                                                                       | Runs                                          | Role                                                                                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Scheme pre-action                  | The app's **shared** scheme (`xcshareddata/xcschemes/`), under `BuildAction` → `PreActions` | Before Xcode resolves the Swift package graph | **Primary.** Because it precedes resolution, one build picks up a dependency-graph change from `npm install`. |
-| `Sync SPM Autolinking` build phase | `.xcodeproj`, prepended before `Sources`                                                    | After resolution, before compilation          | **Safety net** for builds that bypass the scheme (and for a scheme whose pre-action was stripped).            |
+| Hook                               | Where                                                                                       | Role                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Scheme pre-action                  | The app's **shared** scheme (`xcshareddata/xcschemes/`), under `BuildAction` → `PreActions` | Fires earlier in the build than a build phase can, so it is the one that normally does the re-sync. |
+| `Sync SPM Autolinking` build phase | `.xcodeproj`, prepended before `Sources`                                                    | **Safety net** for builds that bypass the scheme (and for a scheme whose pre-action was stripped).  |
 
-Ordering is why there are two: a build phase runs _after_ the package graph is
-resolved, so on its own it can never fix a graph Xcode has already failed to
-resolve. The pre-action closes that gap for scheme-driven builds. A fresh clone
-still needs one setup run for the artifacts themselves — see
-[Fresh clones & CI](#fresh-clones--ci).
+Neither hook can bootstrap a clean checkout. Xcode resolves the Swift package
+graph before build phases **and** before scheme pre-actions, so if the generated
+packages are missing entirely, resolution fails and the build stops before
+either hook runs — see [Fresh clones & CI](#fresh-clones--ci). The hooks keep an
+_existing_ set of generated packages current; they do not create the first one.
+
+> Measured with `xcodebuild -scheme … build` on Xcode 26.6:
+> `Resolve Package Graph` is the first step of the build, the pre-action runs
+> after it (before `Prepare packages`), and the build phase later still. A
+> dependency change may therefore need a second build to be picked up, since the
+> re-sync can land after Xcode has computed the build description. If a change
+> hasn't taken effect, build again or re-run `npx react-native spm`.
 
 **How the sync script works:**
 
@@ -465,16 +467,23 @@ still needs one setup run for the artifacts themselves — see
 
 **Ordering:**
 
-| #   | Step                                                         |
-| --- | ------------------------------------------------------------ |
-| —   | **Sync SPM Autolinking** (scheme pre-action)                 |
-| 0   | Resolve Package Graph (Xcode — runs before all build phases) |
-| 1   | Sync SPM Autolinking (build phase — safety net)              |
-| 2   | Sources (compile)                                            |
-| 3   | Frameworks (link)                                            |
-| 4   | Embed React Native Flavored Frameworks                       |
-| 5   | Resources (copy)                                             |
-| 6   | Build JS Bundle                                              |
+As observed in an `xcodebuild -scheme … build` log on Xcode 26.6:
+
+| Step                                            | Owner             |
+| ----------------------------------------------- | ----------------- |
+| Resolve Package Graph                           | Xcode             |
+| **Sync SPM Autolinking**                        | scheme pre-action |
+| Prepare packages / ComputeTargetDependencyGraph | Xcode             |
+| CreateBuildDescription                          | Xcode             |
+| **Sync SPM Autolinking** (safety net)           | build phase 1     |
+| Sources (compile)                               | build phase 2     |
+| Frameworks (link)                               | build phase 3     |
+| Embed React Native Flavored Frameworks          | build phase 4     |
+| Resources (copy)                                | build phase 5     |
+| Build JS Bundle                                 | build phase 6     |
+
+Resolution coming first is what makes the one-time setup run necessary on a
+clean checkout; it is not something either hook can work around.
 
 Failures in either sync hook are non-fatal — it emits a `warning:` and exits 0,
 so an already-generated package graph can still produce a successful build.
