@@ -18,7 +18,7 @@ The documented extension points don't cover a framework:
   Swift/ObjC/C++ modules (e.g. `ExpoModulesCore`) that `spm scaffold` can't
   handle.
 - A one-shot **post-process** of the generated `Package.swift` is **clobbered
-  on the next sync**: the Xcode [auto-sync build phase](./spm-scripts.md#auto-sync-build-phase)
+  on the next sync**: the Xcode [auto-sync hooks](./spm-scripts.md#auto-sync)
   re-runs autolinking on every dependency change. A framework's contribution
   must run *whenever autolinking runs*.
 
