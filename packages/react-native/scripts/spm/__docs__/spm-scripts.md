@@ -544,5 +544,18 @@ As observed in an `xcodebuild -scheme … build` log on Xcode 26.6:
 Resolution coming first is what makes the one-time setup run necessary on a
 clean checkout; it is not something either hook can work around.
 
-Failures in either sync hook are non-fatal — it emits a `warning:` and exits 0,
-so an already-generated package graph can still produce a successful build.
+A sync failure is lenient by default but **not unconditionally**. The generated
+script branches on the exit code:
+
+- **Exit 2** — an autolinked dependency ships no `Package.swift`. This **fails
+  the build** (`exit 1`), deliberately: the autolinker has already printed an
+  `error:` line per dep, and the fix needs a terminal (see
+  [Community packages without a Package.swift](#community-packages-without-a-packageswift)).
+- **Any other non-zero exit** — emits
+  `warning: SPM sync failed — build may use stale codegen/autolinking` and lets
+  the build continue, so an already-generated package graph can still produce a
+  successful build.
+
+That split is the whole reason the missing-manifest case has its own exit code:
+a transient sync hiccup should not break a build that could still succeed, while
+a genuinely missing manifest should not pass silently.
