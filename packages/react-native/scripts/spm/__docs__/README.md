@@ -49,11 +49,11 @@ troubleshooting.
 
 Three documents cover the design, each owning one area:
 
-| Document                                                       | Covers                                                                                                                                                                     |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [spm-scripts.md](./spm-scripts.md)                             | The tool itself: CLI surface, the six-step pipeline, generated directory layout, the two auto-sync hooks, and how Debug/Release flavor selection works.                    |
-| [spm-header-paths-contract.md](./spm-header-paths-contract.md) | How headers and package references resolve. The contract is **zero-`-I`**: no header search paths and no `unsafeFlags` in any generated manifest. Also covers remote mode. |
-| [spm-autolinking-plugins.md](./spm-autolinking-plugins.md)     | The extension seam for frameworks with their own module system (Expo is the first consumer): discovery, the context/return contract, and failure behavior.                 |
+| Document                                                       | Covers                                                                                                                                                                                                    |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [spm-scripts.md](./spm-scripts.md)                             | The tool itself: CLI surface, the six-step pipeline, [every file it creates or modifies](./spm-scripts.md#files-the-tool-touches), the two auto-sync hooks, and how Debug/Release flavor selection works. |
+| [spm-header-paths-contract.md](./spm-header-paths-contract.md) | How headers and package references resolve. The contract is **zero-`-I`**: no header search paths and no `unsafeFlags` in any generated manifest. Also covers remote mode.                                |
+| [spm-autolinking-plugins.md](./spm-autolinking-plugins.md)     | The extension seam for frameworks with their own module system (Expo is the first consumer): discovery, the context/return contract, and failure behavior.                                                |
 
 Two ideas explain most of the architecture:
 
